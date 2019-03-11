@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <map>
 #include <string>
 #include <vector>
@@ -21,7 +22,7 @@ enum Flags
     First     = 1 << 2
 };
 
-constexpr int ModifiersMask = 0xb11;
+constexpr int ModifiersMask = Plural | Uppercase;
 
 // Abbreviation definition
 struct Abbreviation
@@ -180,7 +181,7 @@ namespace gls {
 
     const auto tokens =
     *(
-           commands
+          commands
         | omit[gls_other]
         |
         +(
@@ -200,7 +201,7 @@ namespace gls {
 std::ostream& make_uppercase(std::ostream& out, const std::string& value)
 {
     if (!value.empty())
-        out  << std::toupper(value[0]) << value.substr(1);
+        out << std::toupper(value[0], std::locale::classic()) << value.substr(1);
 
     return out;
 }
@@ -262,7 +263,6 @@ struct Expand
 
     void operator()(const ast::Abbreviation& value) const
     {
-        //out << value.name;
     }
 
     std::ostream& out;
@@ -328,8 +328,6 @@ int main(int argc, char** argv)
         std::cerr << "error: failed to parse the input\n";
         return EXIT_FAILURE;
     }
-
-    std::cout << values.size() << std::endl;
 
     BuildDictionary dict;
 
