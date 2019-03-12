@@ -50,14 +50,17 @@ namespace gls {
     const rule<struct text, std::string> text = "text";
     const rule<struct nested, std::string> nested = "nested";
     const rule<struct group, std::string> group = "group";
+    const rule<struct nested_group, std::string> nested_group = "nested_group";
 
     const auto text_def = lexeme[*(char_ - '{' - '}')];
     const auto nested_def =
-          group
-        | (text >> -group); // Allow to mix groups and text as in "{group1 {group2} text}"
+          nested_group
+        | (text >> -nested_group); // Allow to mix groups and text as in "{group1 {group2} text}"
+    // Make sure to capture the braces of nested groups
+    const auto nested_group_def = char_('{') >> nested >> char_('}');
     const auto group_def = '{' >> nested >> '}';
 
-    BOOST_SPIRIT_DEFINE(text, nested, group);
+    BOOST_SPIRIT_DEFINE(text, nested, nested_group, group);
 
     const auto newacronym_def =
            "\\newacronym"
