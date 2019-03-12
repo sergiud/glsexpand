@@ -1,6 +1,7 @@
 // #define BOOST_SPIRIT_X3_DEBUG
 
 #include <algorithm>
+#include <sstream>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -46,21 +47,32 @@ struct Reference
 namespace gls {
     using namespace boost::spirit::x3;
 
+    const rule<struct options, std::string> options = "options";
+    const rule<struct addition, std::string> addition = "addition";
 
     const rule<struct text, std::string> text = "text";
     const rule<struct nested, std::string> nested = "nested";
     const rule<struct group, std::string> group = "group";
     const rule<struct nested_group, std::string> nested_group = "nested_group";
 
-    const auto text_def = lexeme[*(char_ - '{' - '}')];
+    const auto text_def = lexeme[+(char_ - '{' - '}')];
     const auto nested_def =
-          nested_group
-        | (text >> -nested_group); // Allow to mix groups and text as in "{group1 {group2} text}"
+        +(text | nested_group); // Allow to mix groups and text as in "{group1 {group2} text}"
     // Make sure to capture the braces of nested groups
     const auto nested_group_def = char_('{') >> nested >> char_('}');
-    const auto group_def = '{' >> nested >> '}';
+    const auto group_def = '{' >> -nested >> '}';
+
+    const auto options_def = '[' >> *(char_ - ']') >> ']';
 
     BOOST_SPIRIT_DEFINE(text, nested, nested_group, group);
+
+    const auto addition_def =
+           "\\addition"
+        >> omit[options]
+        >> group
+        ;
+
+    BOOST_SPIRIT_DEFINE(addition, options);
 
     const auto newacronym_def =
            "\\newacronym"
@@ -186,7 +198,7 @@ namespace gls {
     BOOST_SPIRIT_DEFINE(Glsfirst);
     BOOST_SPIRIT_DEFINE(Glspl);
 
-    const auto commands =
+    const auto gls_commands =
           newacronym
         | gls
         | glspl
@@ -195,9 +207,9 @@ namespace gls {
         | Glspl
         ;
 
-    const auto tokens =
+    const auto gls_tokens =
     *(
-          commands
+          gls_commands
         | omit[gls_other]
         |
         +(
@@ -207,6 +219,16 @@ namespace gls {
             - "\\glspl"
             - "\\Gls"
             - "\\Glspl"
+        )
+    ) >> eoi;
+
+    const auto addition_tokens =
+    *(
+          addition
+        |
+        +(
+            char_
+            - "\\addition"
         )
     ) >> eoi;
 
@@ -301,6 +323,9 @@ struct BuildDictionary
     {
         //std::cout << value.name << std::endl;
         dict[value.name] = std::make_pair(value, false);
+
+        if (value.value.empty())
+            std::cerr << "warning: description of " << value.name << " is empty\n";
     }
 
     std::map<std::string, std::pair<ast::Abbreviation, bool> > dict;
@@ -335,7 +360,7 @@ int main(int argc, char** argv)
     (
           boost::spirit::istream_iterator(in)
         , boost::spirit::istream_iterator()
-        , gls::tokens
+        , gls::gls_tokens
         , values
     );
 
@@ -353,9 +378,30 @@ int main(int argc, char** argv)
         }
     );
 
-    Expand e{std::cout, dict.dict};
+    // Expansion of \addition requires a second pass
+    std::stringstream out;
+
+    Expand e{out, dict.dict};
 
     for (auto val : values) {
         val.apply_visitor(e);
     }
+
+    std::string gls = out.str();
+    std::string expanded;
+
+    parsed = parse
+    (
+          gls.begin()
+        , gls.end()
+        , gls::addition_tokens
+        , expanded
+    );
+
+    if (!parsed) {
+        std::cerr << "error: failed to parse the input\n";
+        return EXIT_FAILURE;
+    }
+
+    std::copy(expanded.begin(), expanded.end(), std::ostreambuf_iterator<char>(std::cout));
 }
