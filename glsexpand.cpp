@@ -1,3 +1,5 @@
+// #define BOOST_SPIRIT_X3_DEBUG
+
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
@@ -28,7 +30,7 @@ constexpr int ModifiersMask = Plural | Uppercase;
 struct Abbreviation
 {
     std::string name;
-    std::string name1;
+    std::string shortName;
     std::string value;
 };
 
@@ -44,10 +46,21 @@ struct Reference
 namespace gls {
     using namespace boost::spirit::x3;
 
-    const auto group = lit('{') >> +(char_ - '}') >> lit('}');
+
+    const rule<struct text, std::string> text = "text";
+    const rule<struct nested, std::string> nested = "nested";
+    const rule<struct group, std::string> group = "group";
+
+    const auto text_def = lexeme[*(char_ - '{' - '}')];
+    const auto nested_def =
+          group
+        | (text >> -group); // Allow to mix groups and text as in "{group1 {group2} text}"
+    const auto group_def = '{' >> nested >> '}';
+
+    BOOST_SPIRIT_DEFINE(text, nested, group);
 
     const auto newacronym_def =
-           lit("\\newacronym")
+           "\\newacronym"
         >> group
         [
             (
@@ -62,7 +75,7 @@ namespace gls {
             (
                 [] (auto& ctx)
                 {
-                    _val(ctx).name1 = _attr(ctx);
+                    _val(ctx).shortName = _attr(ctx);
                 }
             )
         ]
@@ -186,12 +199,11 @@ namespace gls {
         |
         +(
             char_
-            - lit("\\newacronym")
-            - lit("\\gls")
-            - lit("\\glspl")
-            - lit("\\Gls")
-            - lit("\\Glsfirst")
-            - lit("\\Glspl")
+            - "\\newacronym"
+            - "\\gls"
+            - "\\glspl"
+            - "\\Gls"
+            - "\\Glspl"
         )
     ) >> eoi;
 
@@ -231,27 +243,27 @@ struct Expand
             switch (value.flags & ast::ModifiersMask) {
                 case ast::None:
                     if (!used)
-                        out << pos->second.first.value << " (" << pos->second.first.name1 << ")";
+                        out << pos->second.first.value << " (" << pos->second.first.shortName << ")";
                     else
-                        out << pos->second.first.name1;
+                        out << pos->second.first.shortName;
                     break;
                 case ast::Plural:
                     if (!used)
-                        out << pos->second.first.value << "s" << " (" << pos->second.first.name1 << "s)";
+                        out << pos->second.first.value << "s" << " (" << pos->second.first.shortName << "s)";
                     else
-                        out << pos->second.first.name1 << "s";
+                        out << pos->second.first.shortName << "s";
                     break;
                 case ast::Uppercase:
                     if (!used)
-                        make_uppercase(out, pos->second.first.value) << " (" << pos->second.first.name1 << ")";
+                        make_uppercase(out, pos->second.first.value) << " (" << pos->second.first.shortName << ")";
                     else
-                        make_uppercase(out, pos->second.first.name1);
+                        make_uppercase(out, pos->second.first.shortName);
                     break;
                 case ast::Uppercase | ast::Plural:
                     if (!used)
-                        make_uppercase(out, pos->second.first.value) << "s" << " (" << pos->second.first.name1 << "s)";
+                        make_uppercase(out, pos->second.first.value) << "s" << " (" << pos->second.first.shortName << "s)";
                     else
-                        make_uppercase(out, pos->second.first.name1) << "s";
+                        make_uppercase(out, pos->second.first.shortName) << "s";
                     break;
             }
 
@@ -343,5 +355,4 @@ int main(int argc, char** argv)
     for (auto val : values) {
         val.apply_visitor(e);
     }
-    //std::copy(values.begin(), values.end(), std::ostream_iterator<Entry>(std::cout, "\n"));
 }
