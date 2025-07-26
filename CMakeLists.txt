@@ -1,7 +1,7 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required (VERSION 3.15)
 project (glsexpand LANGUAGES CXX)
 
-find_package (Boost 1.69 REQUIRED)
+find_package (Boost 1.69 REQUIRED NO_MODULE)
 
 add_executable (glsexpand
   glsexpand.cpp
